@@ -21,6 +21,8 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.Trace;
 import android.os.UserManager;
 import android.provider.Settings;
@@ -72,10 +74,14 @@ public class CallButtonPresenter
   private static final String KEY_RECORDING_WARNING_PRESENTED = "recording_warning_presented";
 
   private final Context context;
+  private final Handler handler = new Handler(Looper.getMainLooper());
   private InCallButtonUi inCallButtonUi;
   private DialerCall call;
   private boolean isInCallButtonUiReady;
   private PhoneAccountHandle otherAccount;
+  private String autoRecordingCallId;
+  private String pendingAutoRecordingCallId;
+  private final Runnable autoRecordingRunnable = this::startAutomaticRecording;
 
   private final CallRecorder.RecordingProgressListener recordingProgressListener =
       new CallRecorder.RecordingProgressListener() {
@@ -116,6 +122,7 @@ public class CallButtonPresenter
 
     CallRecorder recorder = CallRecorder.getInstance();
     recorder.addRecordingProgressListener(recordingProgressListener);
+    inCallButtonUi.setCallRecordingState(recorder.isRecording());
 
     // Update the buttons state immediately for the current call
     onStateChange(InCallState.NO_CALLS, inCallPresenter.getInCallState(), CallList.getInstance());
@@ -125,6 +132,7 @@ public class CallButtonPresenter
   @Override
   public void onInCallButtonUiUnready() {
     Assert.checkState(isInCallButtonUiReady);
+    cancelPendingAutomaticRecording();
     inCallButtonUi = null;
     InCallPresenter.getInstance().removeListener(this);
     AudioModeProvider.getInstance().removeListener(this);
@@ -176,7 +184,65 @@ public class CallButtonPresenter
       call.addListener(this);
     }
     updateUi(newState, call);
+    if (newState == InCallState.INCALL && call != null) {
+      maybeStartAutomaticRecording(call);
+    } else if (newState == InCallState.NO_CALLS) {
+      cancelPendingAutomaticRecording();
+      autoRecordingCallId = null;
+    }
     Trace.endSection();
+  }
+
+  private void maybeStartAutomaticRecording(DialerCall activeCall) {
+    SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+    if (!preferences.getBoolean(context.getString(R.string.auto_call_recording_key), false)) {
+      return;
+    }
+
+    String activeCallId = activeCall.getId();
+    if (activeCallId == null
+        || activeCallId.equals(autoRecordingCallId)
+        || activeCallId.equals(pendingAutoRecordingCallId)) {
+      return;
+    }
+
+    CallRecorder recorder = CallRecorder.getInstance();
+    if (recorder.isRecording() || !recorder.canRecordInCurrentCountry()) {
+      return;
+    }
+
+    pendingAutoRecordingCallId = activeCallId;
+    handler.postDelayed(autoRecordingRunnable, 500);
+  }
+
+  private void startAutomaticRecording() {
+    String callId = pendingAutoRecordingCallId;
+    pendingAutoRecordingCallId = null;
+    if (callId == null
+        || call == null
+        || !callId.equals(call.getId())
+        || inCallButtonUi == null
+        || InCallPresenter.getInstance().getInCallState() != InCallState.INCALL) {
+      return;
+    }
+
+    SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+    if (!preferences.getBoolean(context.getString(R.string.auto_call_recording_key), false)) {
+      return;
+    }
+
+    CallRecorder recorder = CallRecorder.getInstance();
+    if (recorder.isRecording() || !recorder.canRecordInCurrentCountry()) {
+      return;
+    }
+
+    autoRecordingCallId = callId;
+    callRecordClicked(true);
+  }
+
+  private void cancelPendingAutomaticRecording() {
+    handler.removeCallbacks(autoRecordingRunnable);
+    pendingAutoRecordingCallId = null;
   }
 
   /**
@@ -326,6 +392,11 @@ public class CallButtonPresenter
   }
 
   private void startCallRecordingOrAskForPermission() {
+    if (call == null) {
+      LogUtil.w("CallButtonPresenter.startCallRecording", "No active call to record");
+      return;
+    }
+
     if (hasAllPermissions(CallRecorder.REQUIRED_PERMISSIONS)) {
       CallRecorder recorder = CallRecorder.getInstance();
       recorder.startRecording(call.getNumber(), call.getCreationTimeMillis());

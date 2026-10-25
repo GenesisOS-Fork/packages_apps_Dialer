@@ -19,6 +19,7 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root_layout"
+    android:background="?android:attr/windowBackground"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -29,6 +30,7 @@
 
   <androidx.coordinatorlayout.widget.CoordinatorLayout
       android:id="@+id/coordinator_layout"
+      android:background="?android:attr/windowBackground"
       android:layout_width="match_parent"
       android:layout_height="match_parent"
       android:layout_below="@+id/toolbar"
@@ -50,7 +52,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
-        android:layout_gravity="end|bottom"
+        android:layout_gravity="center_horizontal|bottom"
         android:forceDarkAllowed="false"
         android:src="@drawable/quantum_ic_dialpad_vd_theme_24"
         android:tint="@color/dialer_fab_icon_color"
@@ -74,8 +76,7 @@
   <FrameLayout
       android:id="@+id/dialpad_fragment_container"
       android:layout_width="match_parent"
-      android:layout_height="match_parent"
-      android:elevation="10dp"/>
+      android:layout_height="match_parent"/>
 
   <!-- TODO(calderwoodra): investigate what this is for and why we want it. -->
   <!-- Host container for the contact tile drag shadow -->

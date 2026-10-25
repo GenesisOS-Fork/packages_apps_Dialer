@@ -98,7 +98,7 @@ android_app {
     aidl: {
         local_include_dirs: ["java"],
     },
-    certificate: "shared",
+    certificate: "platform",
     exclude_srcs: ["java/com/android/dialer/rootcomponentgenerator/*.java"],
     libs: [
         "auto_value_annotations",

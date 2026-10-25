@@ -21,8 +21,9 @@
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:minWidth="80dp"
-    android:minHeight="56dp"
-    android:gravity="center">
+    android:minHeight="80dp"
+    android:gravity="center"
+    android:background="?android:attr/selectableItemBackground">
 
   <FrameLayout
       android:layout_width="wrap_content"
@@ -40,13 +41,13 @@
         android:layout_height="32dp"
         android:background="@drawable/pill"
         android:gravity="center"
-        android:visibility="visible"/>
+        android:visibility="gone"/>
 
     <ImageView
         android:id="@+id/bottom_nav_item_image"
         android:layout_width="24dp"
         android:layout_height="24dp"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="8dp"
         android:layout_marginBottom="4dp"
         android:layout_gravity="center"
         tools:src="@drawable/quantum_ic_star_vd_theme_24"/>
@@ -75,9 +76,11 @@
       android:id="@+id/bottom_nav_item_text"
       android:layout_width="wrap_content"
       android:layout_height="wrap_content"
-      android:layout_marginBottom="16dp"
+      android:layout_marginBottom="8dp"
       android:gravity="center_horizontal"
-      android:textSize="12sp"
-      style="@style/Dialer.TextAppearance.OVERLINE"
+      android:maxLines="1"
+      android:ellipsize="end"
+      android:textSize="15sp"
+      style="@style/Dialer.TextAppearance.Primary"
       android:textColor="?android:attr/textColorPrimary"/>
 </com.android.dialer.main.impl.bottomnav.BottomNavItem>

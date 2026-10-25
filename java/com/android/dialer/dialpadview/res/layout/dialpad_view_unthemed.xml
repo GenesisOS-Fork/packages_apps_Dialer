@@ -23,9 +23,9 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:layout_gravity="bottom"
-    android:background="?attr/dialpad_background"
+    android:background="@color/rounded_dialpad_bg_color"
     android:clickable="true"
-    android:elevation="?attr/dialpad_elevation"
+    android:elevation="0dp"
     android:layoutDirection="ltr"
     android:orientation="vertical">
 

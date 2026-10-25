@@ -26,6 +26,7 @@ import android.text.BidiFormatter;
 import android.text.TextDirectionHeuristics;
 import android.text.TextUtils;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.accessibility.AccessibilityEvent;
 import android.widget.Chronometer;
 import android.widget.ImageView;
@@ -67,6 +68,7 @@ public class ContactGridManager {
   // Row 1: +1 (650) 253-0000
   private final TextView contactNameTextView;
   @Nullable private ImageView avatarImageView;
+  private boolean isFullScreenAvatar;
 
   // Row 2: Mobile +1 (650) 253-0000
   // Row 2: [HD attempting icon]/[HD icon] 00:15
@@ -103,6 +105,7 @@ public class ContactGridManager {
     Assert.isNotNull(context);
 
     this.avatarImageView = avatarImageView;
+    isFullScreenAvatar = isFullScreenAvatar(avatarImageView);
     this.avatarSize = avatarSize;
     this.showAnonymousAvatar = showAnonymousAvatar;
     connectionIconImageView = view.findViewById(R.id.contactgrid_connection_icon);
@@ -185,6 +188,7 @@ public class ContactGridManager {
   public void setAvatarImageView(
       @Nullable ImageView avatarImageView, int avatarSize, boolean showAnonymousAvatar) {
     this.avatarImageView = avatarImageView;
+    isFullScreenAvatar = isFullScreenAvatar(avatarImageView);
     this.avatarSize = avatarSize;
     this.showAnonymousAvatar = showAnonymousAvatar;
     updatePrimaryNameAndPhoto();
@@ -221,6 +225,10 @@ public class ContactGridManager {
     boolean hasPhoto =
         (primaryInfo.photo() != null || primaryInfo.photoUri() != null)
             && primaryInfo.photoType() == ContactPhotoType.CONTACT;
+    if (isFullScreenAvatar && !hasPhoto) {
+      avatarImageView.setVisibility(View.GONE);
+      return false;
+    }
     if (!hasPhoto && !showAnonymousAvatar) {
       avatarImageView.setVisibility(View.GONE);
       return false;
@@ -228,6 +236,12 @@ public class ContactGridManager {
 
     avatarImageView.setVisibility(View.VISIBLE);
     return true;
+  }
+
+  private static boolean isFullScreenAvatar(@Nullable ImageView avatarImageView) {
+    return avatarImageView != null
+        && avatarImageView.getLayoutParams() != null
+        && avatarImageView.getLayoutParams().width == ViewGroup.LayoutParams.MATCH_PARENT;
   }
 
   /**

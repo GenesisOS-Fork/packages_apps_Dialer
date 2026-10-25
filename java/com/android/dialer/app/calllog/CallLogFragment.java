@@ -21,10 +21,17 @@ import static android.Manifest.permission.READ_CALL_LOG;
 
 import android.app.Activity;
 import android.app.KeyguardManager;
+import android.content.ActivityNotFoundException;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.Intent;
 import android.database.ContentObserver;
 import android.database.Cursor;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.drawable.Drawable;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -46,6 +53,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -97,6 +105,8 @@ public class CallLogFragment extends Fragment
   private static final int NO_DATE_LIMIT = 0;
 
   private static final int EVENT_UPDATE_DISPLAY = 1;
+  private static final int SWIPE_DELETE_BACKGROUND_COLOR = 0xFFF44336;
+  private static final int SWIPE_MESSAGE_BACKGROUND_COLOR = 0xFF4CAF50;
 
   private static final long MILLIS_IN_MINUTE = 60 * 1000;
   private final Handler handler = new Handler(Looper.getMainLooper());
@@ -109,6 +119,9 @@ public class CallLogFragment extends Fragment
   private RecyclerView recyclerView;
   private LinearLayoutManager layoutManager;
   private CallLogAdapter adapter;
+  private final Paint swipeActionPaint = new Paint();
+  private Drawable swipeDeleteIcon;
+  private Drawable swipeMessageIcon;
   private CallLogQueryHandler callLogQueryHandler;
   private boolean scrollToTop;
   private EmptyContentView emptyListView;
@@ -299,8 +312,87 @@ public class CallLogFragment extends Fragment
     recyclerView.setHasFixedSize(true);
     layoutManager = new LinearLayoutManager(getActivity());
     recyclerView.setLayoutManager(layoutManager);
+    swipeDeleteIcon =
+        AppCompatResources.getDrawable(requireContext(), R.drawable.quantum_ic_delete_vd_theme_24);
+    swipeMessageIcon =
+        AppCompatResources.getDrawable(requireContext(), R.drawable.quantum_ic_message_vd_theme_24);
+    if (swipeDeleteIcon != null) {
+      swipeDeleteIcon.setTint(Color.WHITE);
+    }
+    if (swipeMessageIcon != null) {
+      swipeMessageIcon.setTint(Color.WHITE);
+    }
+    new ItemTouchHelper(
+            new ItemTouchHelper.SimpleCallback(
+                0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
+              @Override
+              public boolean onMove(
+                  RecyclerView recyclerView,
+                  RecyclerView.ViewHolder viewHolder,
+                  RecyclerView.ViewHolder target) {
+                return false;
+              }
+
+              @Override
+              public void onSwiped(RecyclerView.ViewHolder viewHolder, int direction) {
+                int position = viewHolder.getBindingAdapterPosition();
+                if (!(viewHolder instanceof CallLogListItemViewHolder) || position < 0) {
+                  if (position >= 0) {
+                    adapter.notifyItemChanged(position);
+                  }
+                  return;
+                }
+
+                CallLogListItemViewHolder callLogViewHolder =
+                    (CallLogListItemViewHolder) viewHolder;
+                if (direction == ItemTouchHelper.LEFT) {
+                  if (callLogViewHolder.number != null) {
+                    Intent intent =
+                        new Intent(
+                            Intent.ACTION_SENDTO,
+                            Uri.fromParts("smsto", callLogViewHolder.number, null));
+                    if (intent.resolveActivity(requireContext().getPackageManager()) != null) {
+                      try {
+                        startActivity(intent);
+                      } catch (ActivityNotFoundException e) {
+                        LogUtil.w(
+                            "CallLogFragment.onSwiped",
+                            "Messaging activity was unavailable when launching");
+                      }
+                    } else {
+                      LogUtil.w("CallLogFragment.onSwiped", "No messaging activity available");
+                    }
+                  }
+                  adapter.notifyItemChanged(position);
+                } else if (direction == ItemTouchHelper.RIGHT) {
+                  if (!deleteCallLogEntries(callLogViewHolder.callIds)) {
+                    adapter.notifyItemChanged(position);
+                  }
+                } else {
+                  adapter.notifyItemChanged(position);
+                }
+              }
+
+              @Override
+              public void onChildDraw(
+                  Canvas canvas,
+                  RecyclerView recyclerView,
+                  RecyclerView.ViewHolder viewHolder,
+                  float dX,
+                  float dY,
+                  int actionState,
+                  boolean isCurrentlyActive) {
+                if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE
+                    && viewHolder instanceof CallLogListItemViewHolder) {
+                  drawSwipeAction(canvas, viewHolder.itemView, dX);
+                }
+                super.onChildDraw(
+                    canvas, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive);
+              }
+            })
+        .attachToRecyclerView(recyclerView);
     emptyListView = (EmptyContentView) view.findViewById(R.id.empty_list_view);
-    emptyListView.setImage(R.drawable.empty_call_log);
+    emptyListView.setImage(R.drawable.oneplus_empty_call_log_illustration);
     emptyListView.setActionClickedListener(this);
     modalAlertView = (ViewGroup) view.findViewById(R.id.modal_message_container);
     modalAlertManager =
@@ -312,6 +404,57 @@ public class CallLogFragment extends Fragment
     multiSelectUnSelectAllViewContent.setOnClickListener(null);
     selectUnselectAllIcon.setOnClickListener(this);
     selectUnselectAllViewText.setOnClickListener(this);
+  }
+
+  private boolean deleteCallLogEntries(long[] callIds) {
+    if (callIds == null || callIds.length == 0 || getContext() == null) {
+      return false;
+    }
+
+    StringBuilder selection = new StringBuilder(Calls._ID).append(" IN (");
+    for (int index = 0; index < callIds.length; index++) {
+      if (index > 0) {
+        selection.append(',');
+      }
+      selection.append(callIds[index]);
+    }
+    selection.append(')');
+
+    int deletedCount =
+        getContext()
+            .getContentResolver()
+            .delete(Calls.CONTENT_URI, selection.toString(), null);
+    if (deletedCount == 0) {
+      LogUtil.w("CallLogFragment.deleteCallLogEntries", "No matching call log entries deleted");
+    }
+    return deletedCount > 0;
+  }
+
+  private void drawSwipeAction(Canvas canvas, View itemView, float dX) {
+    if (dX == 0) {
+      return;
+    }
+
+    boolean deleting = dX > 0;
+    swipeActionPaint.setColor(
+        deleting ? SWIPE_DELETE_BACKGROUND_COLOR : SWIPE_MESSAGE_BACKGROUND_COLOR);
+    float left = deleting ? itemView.getLeft() : itemView.getRight() + dX;
+    float right = deleting ? itemView.getLeft() + dX : itemView.getRight();
+    canvas.drawRect(left, itemView.getTop(), right, itemView.getBottom(), swipeActionPaint);
+
+    Drawable icon = deleting ? swipeDeleteIcon : swipeMessageIcon;
+    if (icon == null) {
+      return;
+    }
+
+    int iconSize = icon.getIntrinsicHeight();
+    int top = itemView.getTop() + (itemView.getHeight() - iconSize) / 2;
+    int leftPosition =
+        deleting
+            ? itemView.getLeft() + 20
+            : itemView.getRight() - 20 - icon.getIntrinsicWidth();
+    icon.setBounds(leftPosition, top, leftPosition + icon.getIntrinsicWidth(), top + iconSize);
+    icon.draw(canvas);
   }
 
   protected void setupData() {
